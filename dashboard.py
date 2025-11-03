@@ -29,7 +29,7 @@ def load_data():
 df = load_data()
 
 st.sidebar.title(' Navegación')
-page = st.sidebar.radio('Seleccionar Vista:', ['Resumen Ejecutivo', 'Análisis Detallado', 'Perfiles de Clústeres', 'Detalles Técnicos'])
+page = st.sidebar.radio('Seleccionar Vista:', ['Resumen Ejecutivo', 'Análisis Detallado', 'Perfiles de Clústeres', 'Distribución Geográfica', 'Detalles Técnicos'])
 st.sidebar.markdown('---')
 st.sidebar.metric('Total de Ataques', len(df))
 st.sidebar.metric('Clústeres Identificados', df['cluster'].nunique())
@@ -75,6 +75,66 @@ elif page == 'Perfiles de Clústeres':
         c1, c2 = st.columns(2)
         c1.plotly_chart(px.histogram(df_filtered, x=col, color=df_filtered['cluster'].astype(str), barmode='overlay', opacity=0.7, color_discrete_sequence=['#3b82f6','#ef4444']), use_container_width=True)
         c2.plotly_chart(px.violin(df_filtered, y=col, x='cluster', color=df_filtered['cluster'].astype(str), box=True, color_discrete_sequence=['#3b82f6','#ef4444']), use_container_width=True)
+
+elif page == 'Distribución Geográfica':
+    st.markdown('###  Distribución Geográfica de Ataques por Cluster')
+    
+    # Check if Location column exists
+    if 'Location' in df_filtered.columns:
+        # Remove null locations
+        geo_df = df_filtered.dropna(subset=['Location'])
+        
+        # Count attacks per location per cluster
+        geo_agg = geo_df.groupby(['Location', 'cluster']).size().reset_index(name='attack_count')
+        
+        # Create geographic scatter plot
+        fig_geo = px.scatter_geo(
+            geo_agg,
+            locations="Location",
+            locationmode="country names",
+            color="cluster",
+            size="attack_count",  # Size bubbles by number of attacks
+            hover_name="Location",
+            hover_data={"attack_count": True, "cluster": True},
+            title="Distribución Geográfica de Ataques por Cluster",
+            color_discrete_sequence=['#3b82f6','#ef4444'],
+            projection="natural earth",
+            opacity=0.75,
+        )
+        fig_geo.update_layout(
+            geo=dict(
+                showframe=False, 
+                showcoastlines=True, 
+                coastlinecolor="gray", 
+                landcolor="lightgray"
+            ),
+            legend_title_text="Cluster",
+            height=600
+        )
+        st.plotly_chart(fig_geo, use_container_width=True)
+        
+        # Show statistics
+        st.markdown('###  Estadísticas por Ubicación')
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown('**Top 10 Ubicaciones - Cluster 0**')
+            top_loc_0 = geo_agg[geo_agg['cluster'] == '0'].nlargest(10, 'attack_count')
+            st.dataframe(top_loc_0[['Location', 'attack_count']], use_container_width=True)
+        
+        with col2:
+            st.markdown('**Top 10 Ubicaciones - Cluster 1**')
+            top_loc_1 = geo_agg[geo_agg['cluster'] == '1'].nlargest(10, 'attack_count')
+            st.dataframe(top_loc_1[['Location', 'attack_count']], use_container_width=True)
+        
+        # Summary metrics
+        st.markdown('---')
+        m1, m2, m3 = st.columns(3)
+        m1.metric('Países Únicos', geo_agg['Location'].nunique())
+        m2.metric('Total de Ataques', geo_agg['attack_count'].sum())
+        m3.metric('Promedio por País', f"{geo_agg['attack_count'].mean():.1f}")
+    else:
+        st.warning('⚠️ La columna "Location" no está disponible en los datos.')
 
 else:
     st.markdown('###  Metodología y Detalles Técnicos')
